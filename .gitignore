@@ -1,0 +1,34 @@
+# 忽略Python缓存和编译文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 忽略数据集
+/data/COCO_Dataset/
+/data/coconut/
+/data/CUB_200_2011/
+/data/segmentations/
+/data/cocottributes-master/
+
+# 忽略检查点、日志和训练输出
+/checkpoints/
+/checkpoints_coco/
+/logs_coco/
+/weak-supervised-cross-modal-package/
+*.pth
+*.jbl
+*.pkl
+*.log
+*.tgz
+
+# 忽略PDF和ZIP文件
+*.pdf
+*.zip
+
+# 忽略根目录下的特定文档
+/弱监督解耦的跨模态属性对齐创新点.md
+/弱监督解耦的跨模态属性对齐源码复用方案.md
+/解耦实施步骤.md
+
+# 忽略VS Code特定文件
+.vscode/ 

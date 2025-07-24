@@ -1,0 +1,116 @@
+# Docker构建时忽略的文件和目录
+
+# Git相关
+.git
+.gitignore
+.gitattributes
+
+# Python缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv/
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+
+# 日志文件
+*.log
+logs/
+*.out
+
+# 临时文件和缓存
+tmp/
+temp/
+cache/
+.cache/
+
+# 测试相关
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# 大型数据文件（可选择性包含）
+# 注释掉下面的行如果需要包含这些文件
+# *.zip
+# *.tar.gz
+# *.tgz
+# *.rar
+
+# 不必要的文档和图片（保留重要的）
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+!training_curves.png
+!final_training_curves.png
+
+# 备份文件
+*.bak
+*.backup
+*.old
+
+# 编译文件
+*.o
+*.a
+*.lib
+*.dll
+*.exe
+
+# 特定项目文件
+.specstory/
+experiments/
+notebooks/
+
+# 大型模型文件（根据需要调整）
+# *.pth
+# *.pt
+# *.ckpt
+
+# 数据集压缩包（如果已解压）
+*.tgz
+*.tar.gz
+data/*.zip
+data/*.tgz
+
+# 临时训练输出
+wandb/
+tensorboard_logs/

@@ -1,0 +1,160 @@
+version: '3.8'
+
+services:
+  # 主要的训练和推理服务
+  weak-supervised-cross-modal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: weak-supervised-cross-modal:latest
+    container_name: weak_supervised_cross_modal
+    
+    # GPU支持
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    
+    # 端口映射
+    ports:
+      - "8888:8888"  # Jupyter Lab
+      - "6006:6006"  # TensorBoard
+      - "8080:8080"  # 备用端口
+    
+    # 卷挂载
+    volumes:
+      - ./results:/workspace/results          # 结果输出
+      - ./logs:/workspace/logs                # 日志文件
+      - ./checkpoints:/workspace/checkpoints  # 模型检查点
+      - ./data:/workspace/data                # 数据集（可选）
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw     # X11转发（可选）
+    
+    # 环境变量
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONPATH=/workspace
+      - TORCH_HOME=/workspace/.torch
+      - WANDB_MODE=offline  # 离线模式，避免网络问题
+      - DISPLAY=${DISPLAY}  # X11显示（可选）
+    
+    # 工作目录
+    working_dir: /workspace
+    
+    # 默认命令
+    command: bash
+    
+    # 交互式终端
+    stdin_open: true
+    tty: true
+    
+    # 重启策略
+    restart: unless-stopped
+    
+    # 网络模式
+    network_mode: bridge
+
+  # Jupyter Lab服务（独立运行）
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: weak-supervised-cross-modal:latest
+    container_name: jupyter_lab
+    
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    
+    ports:
+      - "8888:8888"
+    
+    volumes:
+      - ./results:/workspace/results
+      - ./logs:/workspace/logs
+      - ./checkpoints:/workspace/checkpoints
+      - ./notebooks:/workspace/notebooks  # Jupyter notebooks
+    
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONPATH=/workspace
+    
+    command: jupyter
+    
+    restart: unless-stopped
+    
+    profiles:
+      - jupyter
+
+  # TensorBoard服务（独立运行）
+  tensorboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: weak-supervised-cross-modal:latest
+    container_name: tensorboard
+    
+    ports:
+      - "6006:6006"
+    
+    volumes:
+      - ./logs:/workspace/logs
+    
+    command: tensorboard
+    
+    restart: unless-stopped
+    
+    profiles:
+      - tensorboard
+
+  # 训练服务（后台运行）
+  training:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: weak-supervised-cross-modal:latest
+    container_name: training_service
+    
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    
+    volumes:
+      - ./results:/workspace/results
+      - ./logs:/workspace/logs
+      - ./checkpoints:/workspace/checkpoints
+    
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONPATH=/workspace
+      - WANDB_MODE=offline
+    
+    # 默认训练命令（可以通过环境变量覆盖）
+    command: train-cub --epochs 50 --batch-size 32
+    
+    restart: "no"  # 训练完成后不重启
+    
+    profiles:
+      - training
+
+# 网络配置
+networks:
+  default:
+    driver: bridge
+
+# 卷配置
+volumes:
+  model_cache:
+    driver: local
+  torch_cache:
+    driver: local
