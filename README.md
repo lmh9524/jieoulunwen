@@ -64,10 +64,12 @@ pip install -r requirements.txt
 确保CelebA数据集按以下结构组织：
 ```
 /autodl-pub/data/CelebA/
-├── img_align_celeba/          # 图像文件
-├── annotations/
+├── Img/                       # 图像文件目录
+│   └── img_align_celeba/      # 实际图像文件（可能需要解压）
+├── Anno/                      # 标注文件目录
 │   ├── list_attr_celeba.txt   # 属性标注
 │   └── list_eval_partition.txt # 数据分割
+└── Eval/                      # 评估分割信息
 ```
 
 ### 3. 开始训练

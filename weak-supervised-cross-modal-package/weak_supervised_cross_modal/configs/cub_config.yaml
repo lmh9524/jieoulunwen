@@ -1,0 +1,97 @@
+# CUB-200-2011数据集配置 - 100 Epochs长期训练
+# 弱监督跨模态属性对齐训练配置
+
+# 数据配置
+data:
+  root_path: "../data/CUB_200_2011/CUB_200_2011"
+  batch_size: 32
+  num_workers: 4
+  image_size: 224
+  use_augmentation: true
+
+# 模型配置
+model:
+  visual_dim: 2048
+  text_dim: 312
+  hidden_dim: 512
+  output_dim: 256
+  num_classes: 200
+  num_attributes: 312
+  dropout: 0.1
+  use_frequency_decoupling: false
+  use_dynamic_routing: false
+  use_hierarchical_decomposition: false
+  use_cmdl_regularization: false
+
+# 训练配置
+training:
+  num_epochs: 100
+  learning_rate: 0.0001  # 降低学习率进行精细训练
+  weight_decay: 0.0001
+  
+  # 学习率调度策略 - 适配100个epoch
+  scheduler_type: "cosine"  # 使用余弦退火调度
+  step_size: 30  # MultiStepLR的步长
+  gamma: 0.1     # 学习率衰减因子
+  milestones: [30, 60, 80]  # MultiStepLR的里程碑
+  
+  # 早停策略 - 更严格的早停
+  early_stopping:
+    patience: 25  # 25个epoch无改善则停止
+    min_delta: 0.0001  # 更小的改善阈值
+    
+  # 模型保存策略
+  save_strategy:
+    save_interval: 10  # 每10个epoch保存一次
+    save_best: true    # 保存最佳模型
+    save_last: true    # 保存最后一个模型
+    
+  # 验证策略
+  validation:
+    eval_interval: 1   # 每个epoch都进行验证
+    
+  # 优化器设置
+  optimizer:
+    type: "adam"
+    betas: [0.9, 0.999]
+    eps: 1e-8
+
+# 损失函数权重
+loss_weights:
+  classification: 1.0
+  alignment: 0.1
+  contrastive: 0.05
+
+# 数据增强配置
+data_augmentation:
+  horizontal_flip: true
+  rotation: 10
+  color_jitter: 0.1
+  normalize:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+# 评估配置
+evaluation:
+  metrics: ["accuracy", "precision", "recall", "f1"]
+  save_predictions: true
+
+# 保存配置
+checkpoints:
+  save_dir: "checkpoints"
+  save_best: true
+  save_every: 10
+
+# 日志配置
+logging:
+  level: "INFO"
+  save_dir: "logs"
+  tensorboard: true
+
+# 设备配置
+device: "auto"  # auto, cpu, cuda
+mixed_precision: true
+
+# 其他配置
+seed: 42
+pin_memory: true 

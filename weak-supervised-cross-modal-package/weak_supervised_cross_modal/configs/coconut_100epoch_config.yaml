@@ -1,0 +1,80 @@
+# COCONut 100轮Epoch训练配置文件
+# 优化的训练策略配置
+
+# 数据配置
+data:
+  data_dir: "../data/coconut"
+  max_samples: 2000  # 限制样本数量以便快速实验
+  train_split: "val"  # 使用验证集作为训练集
+  val_split: "val"
+  val_ratio: 0.2  # 验证集比例
+
+# 模型配置
+model:
+  hidden_dim: 512
+  num_attention_heads: 8
+  dropout_rate: 0.3
+  freeze_ratio: 0.7  # 初始冻结比例
+  progressive_unfreeze: true  # 渐进式解冻
+
+# 训练配置
+training:
+  epochs: 100
+  batch_size: 8
+  learning_rate: 5e-5
+  weight_decay: 1e-4
+  grad_clip_norm: 1.0
+  
+  # 学习率调度
+  lr_schedule:
+    type: "cosine_with_warmup"
+    warmup_epochs: 10
+    min_lr: 1e-7
+  
+  # 早停配置
+  early_stopping:
+    patience: 25
+    min_delta: 0.001
+    restore_best_weights: true
+  
+  # 损失函数权重
+  loss_weights:
+    main_loss: 1.0
+    contrastive_loss: 0.1
+    attention_reg: 0.01
+    pos_weight: 2.0  # 处理类别不平衡
+
+# 数据增强配置
+augmentation:
+  train:
+    resize: [256, 256]
+    crop: [224, 224]
+    horizontal_flip: 0.5
+    rotation: 10
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.2
+      hue: 0.1
+    random_erasing: 0.1
+  
+  val:
+    resize: [224, 224]
+
+# 监控配置
+monitoring:
+  log_interval: 10
+  save_interval: 10
+  plot_curves: true
+  
+# 输出配置
+output:
+  model_save_path: "coconut_100epoch_model.pth"
+  log_file: "coconut_100epoch_training.log"
+  curves_path: "training_curves.png"
+
+# 硬件配置
+hardware:
+  num_workers: 2
+  pin_memory: true
+  device: "auto"  # 自动选择cuda或cpu 

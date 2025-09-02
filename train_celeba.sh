@@ -28,12 +28,12 @@ if [ ! -d "$CELEBA_PATH" ]; then
     exit 1
 fi
 
-if [ ! -d "$CELEBA_PATH/img_align_celeba" ]; then
+if [ ! -d "$CELEBA_PATH/Img" ]; then
     echo "❌ 错误: CelebA图像目录不存在"
     exit 1
 fi
 
-if [ ! -d "$CELEBA_PATH/annotations" ]; then
+if [ ! -d "$CELEBA_PATH/Anno" ]; then
     echo "❌ 错误: CelebA标注目录不存在"
     exit 1
 fi

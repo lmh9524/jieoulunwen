@@ -406,11 +406,11 @@ def main():
         print(f"❌ 错误: CelebA数据集路径不存在: {celeba_path}")
         return
     
-    if not os.path.exists(f"{celeba_path}/img_align_celeba"):
+    if not os.path.exists(f"{celeba_path}/Img"):
         print(f"❌ 错误: CelebA图像目录不存在")
         return
         
-    if not os.path.exists(f"{celeba_path}/annotations"):
+    if not os.path.exists(f"{celeba_path}/Anno"):
         print(f"❌ 错误: CelebA标注目录不存在")
         return
     

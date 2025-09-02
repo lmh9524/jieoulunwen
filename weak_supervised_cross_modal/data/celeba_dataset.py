@@ -30,8 +30,8 @@ class CelebADataset(Dataset):
         
         # 数据路径
         self.data_root = config.data_path
-        self.images_dir = os.path.join(self.data_root, 'img_align_celeba')
-        self.annotations_dir = os.path.join(self.data_root, 'annotations')
+        self.images_dir = os.path.join(self.data_root, 'Img')
+        self.annotations_dir = os.path.join(self.data_root, 'Anno')
         
         # 加载数据
         self._load_annotations()
@@ -104,8 +104,13 @@ class CelebADataset(Dataset):
         """
         filename = self.image_files[idx]
         
-        # 加载图像
+        # 加载图像 - 处理可能的子目录结构
+        # 首先尝试直接路径
         img_path = os.path.join(self.images_dir, filename)
+        if not os.path.exists(img_path):
+            # 如果直接路径不存在，尝试img_align_celeba子目录
+            img_path = os.path.join(self.images_dir, 'img_align_celeba', filename)
+        
         try:
             image = Image.open(img_path).convert('RGB')
         except Exception as e:
