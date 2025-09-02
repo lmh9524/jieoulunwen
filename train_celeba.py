@@ -401,12 +401,12 @@ def main():
     print("Copyright (c) 2024 - 弱监督解耦的跨模态属性对齐项目")
     
     # 检查CelebA数据集
-    celeba_path = "/autodl-pub/data/CelebA"
+    celeba_path = "/autodl-tmp"
     if not os.path.exists(celeba_path):
         print(f"❌ 错误: CelebA数据集路径不存在: {celeba_path}")
         return
     
-    if not os.path.exists(f"{celeba_path}/Img"):
+    if not os.path.exists(f"{celeba_path}/img_align_celeba"):
         print(f"❌ 错误: CelebA图像目录不存在")
         return
         

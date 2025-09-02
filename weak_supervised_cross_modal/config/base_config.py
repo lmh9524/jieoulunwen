@@ -137,7 +137,7 @@ class COCOAttributesConfig(BaseConfig):
 class CelebAConfig(BaseConfig):
     """CelebA数据集特定配置"""
     dataset_name: str = 'CelebA'
-    data_path: str = '/autodl-pub/data/CelebA'  # CelebA数据集路径
+    data_path: str = '/autodl-tmp'  # CelebA数据集路径
     image_size: int = 224
     num_classes: Dict[str, int] = None
     

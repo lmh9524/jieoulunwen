@@ -22,13 +22,13 @@ else
 fi
 
 # 检查数据集路径
-CELEBA_PATH="/autodl-pub/data/CelebA"
+CELEBA_PATH="/autodl-tmp"
 if [ ! -d "$CELEBA_PATH" ]; then
     echo "❌ 错误: CelebA数据集路径不存在: $CELEBA_PATH"
     exit 1
 fi
 
-if [ ! -d "$CELEBA_PATH/Img" ]; then
+if [ ! -d "$CELEBA_PATH/img_align_celeba" ]; then
     echo "❌ 错误: CelebA图像目录不存在"
     exit 1
 fi
