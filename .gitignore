@@ -1,34 +1,75 @@
-# 忽略Python缓存和编译文件
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# 忽略数据集
-/data/COCO_Dataset/
-/data/coconut/
-/data/CUB_200_2011/
-/data/segmentations/
-/data/cocottributes-master/
-
-# 忽略检查点、日志和训练输出
-/checkpoints/
-/checkpoints_coco/
-/logs_coco/
-/weak-supervised-cross-modal-package/
+# PyTorch
 *.pth
-*.jbl
-*.pkl
+*.pt
+
+# 实验数据和日志
+experiments/
+logs/
+checkpoints/
 *.log
-*.tgz
 
-# 忽略PDF和ZIP文件
-*.pdf
+# 数据集 (太大，不适合Git)
+data/
 *.zip
+*.tar.gz
+*.tar.bz2
 
-# 忽略根目录下的特定文档
-/弱监督解耦的跨模态属性对齐创新点.md
-/弱监督解耦的跨模态属性对齐源码复用方案.md
-/解耦实施步骤.md
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# 忽略VS Code特定文件
-.vscode/ 
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 环境
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# 临时文件
+*.tmp
+*.temp
+
+# 下载脚本产生的临时文件
+download_*.py
+monitor_*.py
+*.json
+*.md
+.specstory/
+
+# 部分文件
+*.part
+*.cr* 

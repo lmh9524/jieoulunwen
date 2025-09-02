@@ -1,0 +1,29 @@
+# 弱监督解耦的跨模态属性对齐项目依赖
+# PyTorch 生态系统
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+
+# 数据处理
+pandas>=1.5.0
+numpy>=1.24.0
+Pillow>=9.0.0
+
+# 科学计算和可视化
+matplotlib>=3.6.0
+seaborn>=0.12.0
+scikit-learn>=1.2.0
+
+# 实用工具
+tqdm>=4.64.0
+requests>=2.28.0
+
+# 开发和调试
+ipython>=8.0.0
+jupyter>=1.0.0
+
+# 可选：如果使用 wandb 进行实验跟踪
+# wandb>=0.13.0
+
+# 可选：如果使用 tensorboard 进行可视化
+# tensorboard>=2.10.0 

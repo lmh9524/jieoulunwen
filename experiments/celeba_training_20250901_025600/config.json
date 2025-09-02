@@ -1,0 +1,30 @@
+{
+  "dataset_name": "CelebA",
+  "num_epochs": 50,
+  "batch_size": 32,
+  "learning_rate": 0.0001,
+  "image_size": 224,
+  "num_classes": {
+    "hair_style": 8,
+    "facial_features": 10,
+    "makeup": 4,
+    "accessories": 5,
+    "expression": 3,
+    "demographics": 4,
+    "facial_hair": 6,
+    "quality": 3
+  },
+  "loss_weights": {
+    "hair_style_cls": 1.0,
+    "facial_features_cls": 1.2,
+    "makeup_cls": 0.8,
+    "accessories_cls": 0.6,
+    "expression_cls": 1.0,
+    "demographics_cls": 1.1,
+    "facial_hair_cls": 0.7,
+    "quality_cls": 0.5,
+    "reg": 0.1,
+    "cal": 0.05,
+    "mavd": 0.03
+  }
+}

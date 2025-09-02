@@ -112,7 +112,7 @@ class CUBConfig(BaseConfig):
 class COCOAttributesConfig(BaseConfig):
     """COCOAttributes数据集特定配置"""
     dataset_name: str = 'COCOAttributes'
-    data_path: str = './data'  # COCOAttributes数据集根目录
+    data_path: str = '../data'  # 修改为相对于当前目录的正确路径
     image_size: int = 224
     num_classes: Dict[str, int] = None
 
@@ -133,12 +133,64 @@ class COCOAttributesConfig(BaseConfig):
             'other': 8        # 其他属性类别
         }
 
+@dataclass
+class CelebAConfig(BaseConfig):
+    """CelebA数据集特定配置"""
+    dataset_name: str = 'CelebA'
+    data_path: str = '/autodl-pub/data/CelebA'  # CelebA数据集路径
+    image_size: int = 224
+    num_classes: Dict[str, int] = None
+    
+    # CelebA特定参数
+    num_attributes: int = 40  # CelebA有40个面部属性
+    batch_size: int = 32  # 适合CelebA的批次大小
+    learning_rate: float = 1e-4  # 适合人脸属性学习的学习率
+    
+    def __post_init__(self):
+        super().__post_init__()
+        # CelebA的属性分组 - 对应数据集适配器中的分类
+        self.num_classes = {
+            'hair_style': 8,      # 头发相关属性
+            'facial_features': 10,  # 面部特征
+            'makeup': 4,          # 化妆相关
+            'accessories': 5,     # 配饰
+            'expression': 3,      # 表情相关
+            'demographics': 4,    # 性别和年龄
+            'facial_hair': 6,     # 胡须相关
+            'quality': 3          # 吸引力和图像质量
+        }
+        
+        # 关闭复杂正则与路由以提升稳定性（CelebA首训仅做分类）
+        self.use_frequency_decoupling = False
+        self.use_hierarchical_decomposition = False
+        self.use_dynamic_routing = False
+        self.use_cmdl_regularization = False
+        
+        # 调整损失权重以适应CelebA（仅保留分类）
+        self.loss_weights = {
+            'hair_style_cls': 1.0,
+            'facial_features_cls': 1.2,  # 面部特征更重要
+            'makeup_cls': 0.8,
+            'accessories_cls': 0.6,
+            'expression_cls': 1.0,
+            'demographics_cls': 1.1,     # 性别年龄识别重要
+            'facial_hair_cls': 0.7,
+            'quality_cls': 0.5,
+            'reg': 0.0,                   # 关闭CMDL正则
+            'cal': 0.0,                   # 关闭CAL
+            'mavd': 0.0,                  # 关闭MAVD
+            'hierarchy': 0.0,             # 关闭层级一致性
+            'frequency': 0.0,             # 关闭频域损失
+            'graph': 0.0                  # 关闭图损失
+        }
+
 def get_config(dataset_name: str = 'CUB') -> BaseConfig:
     """根据数据集名称获取对应配置"""
     config_map = {
         'CUB': CUBConfig(),
         'COCOAttributes': COCOAttributesConfig(),
-        'COCO-Attributes': COCOAttributesConfig()  # 兼容性别名
+        'COCO-Attributes': COCOAttributesConfig(),  # 兼容性别名
+        'CelebA': CelebAConfig()
     }
 
     if dataset_name not in config_map:

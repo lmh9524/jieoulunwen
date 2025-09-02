@@ -419,3 +419,7 @@ class COCOAttributesDataset(Dataset):
     def get_attribute_names(self):
         """获取属性名称列表"""
         return [attr['name'] for attr in self.attributes]
+
+
+# 导入CelebA数据集适配器
+from .celeba_dataset import CelebADatasetAdapter

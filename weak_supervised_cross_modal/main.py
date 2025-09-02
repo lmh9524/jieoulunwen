@@ -16,7 +16,7 @@ from config.base_config import get_config
 from models import WeakSupervisedCrossModalAlignment
 from training.losses import ComprehensiveLoss
 from training.metrics import EvaluationMetrics
-from data.dataset_adapters import DatasetAdapter, CUBDatasetAdapter, COCOAttributesDatasetAdapter
+from data.dataset_adapters import DatasetAdapter, CUBDatasetAdapter, COCOAttributesDatasetAdapter, CelebADatasetAdapter
 from utils.logging_utils import setup_logging
 from utils.checkpoint_utils import save_checkpoint, load_checkpoint
 
@@ -61,6 +61,8 @@ def create_dataloaders(config, args) -> Dict[str, DataLoader]:
         adapter = CUBDatasetAdapter(config)
     elif config.dataset_name == 'COCO-Attributes':
         adapter = COCOAttributesDatasetAdapter(config)
+    elif config.dataset_name == 'CelebA':
+        adapter = CelebADatasetAdapter(config)
     else:
         raise ValueError(f"不支持的数据集: {config.dataset_name}")
     
@@ -72,7 +74,7 @@ def parse_args():
     
     # 基础配置
     parser.add_argument('--dataset', type=str, default='CUB', 
-                       choices=['CUB', 'COCO-Attributes'],
+                       choices=['CUB', 'COCO-Attributes', 'CelebA'],
                        help='数据集名称')
     parser.add_argument('--data_path', type=str, default='./data',
                        help='数据集路径')
