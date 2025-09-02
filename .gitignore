@@ -67,8 +67,10 @@ venv.bak/
 download_*.py
 monitor_*.py
 *.json
-*.md
 .specstory/
+
+# 但不排除项目核心文档
+!README.md
 
 # 部分文件
 *.part
