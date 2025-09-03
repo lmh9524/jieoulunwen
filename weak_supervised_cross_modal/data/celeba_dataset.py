@@ -45,8 +45,9 @@ class CelebADataset(Dataset):
         attr_file = os.path.join(self.annotations_dir, 'list_attr_celeba.txt')
         self.attr_df = pd.read_csv(attr_file, sep=r'\s+', header=1, index_col=0)
         
-        # 加载数据集分割信息
-        partition_file = os.path.join(self.annotations_dir, 'list_eval_partition.txt')
+        # 加载数据集分割信息 (在Eval目录中)
+        eval_dir = os.path.join(self.data_root, 'Eval')
+        partition_file = os.path.join(eval_dir, 'list_eval_partition.txt')
         self.partition_df = pd.read_csv(partition_file, sep=r'\s+', header=None, 
                                        names=['filename', 'partition'], index_col=0)
         

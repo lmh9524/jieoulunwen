@@ -74,7 +74,7 @@ def main():
             
             # 检查具体的标注文件
             attr_file = os.path.join(anno_path, "list_attr_celeba.txt")
-            partition_file = os.path.join(anno_path, "list_eval_partition.txt")
+            partition_file = os.path.join(eval_path, "list_eval_partition.txt")  # 修正：在Eval目录中
             
             print(f"   属性文件: {'✅' if os.path.exists(attr_file) else '❌'} {attr_file}")
             print(f"   分割文件: {'✅' if os.path.exists(partition_file) else '❌'} {partition_file}")

@@ -38,6 +38,11 @@ if [ ! -d "$CELEBA_PATH/Anno" ]; then
     exit 1
 fi
 
+if [ ! -d "$CELEBA_PATH/Eval" ]; then
+    echo "❌ 错误: CelebA评估目录不存在: $(pwd)/$CELEBA_PATH/Eval"
+    exit 1
+fi
+
 echo "✅ CelebA数据集检查通过: $CELEBA_PATH"
 
 # 创建日志目录

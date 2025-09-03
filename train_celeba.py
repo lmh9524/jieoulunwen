@@ -413,6 +413,10 @@ def main():
     if not os.path.exists(f"{celeba_path}/Anno"):
         print(f"❌ 错误: CelebA标注目录不存在: {os.path.abspath(celeba_path)}/Anno")
         return
+        
+    if not os.path.exists(f"{celeba_path}/Eval"):
+        print(f"❌ 错误: CelebA评估目录不存在: {os.path.abspath(celeba_path)}/Eval")
+        return
     
     print(f"✅ CelebA数据集检查通过: {celeba_path}")
     
