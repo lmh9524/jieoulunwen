@@ -37,7 +37,7 @@ data/
 *.tar.bz2
 
 # IDE
-.vscode/
+.vscode/ 
 .idea/
 *.swp
 *.swo
