@@ -21,20 +21,20 @@ else
     exit 1
 fi
 
-# 检查数据集路径
-CELEBA_PATH="/autodl-tmp"
+# 检查数据集路径 (相对路径)
+CELEBA_PATH=".."  # 相对于jieoulunwen-master目录
 if [ ! -d "$CELEBA_PATH" ]; then
-    echo "❌ 错误: CelebA数据集路径不存在: $CELEBA_PATH"
+    echo "❌ 错误: CelebA数据集路径不存在: $(pwd)/$CELEBA_PATH"
     exit 1
 fi
 
 if [ ! -d "$CELEBA_PATH/img_align_celeba" ]; then
-    echo "❌ 错误: CelebA图像目录不存在"
+    echo "❌ 错误: CelebA图像目录不存在: $(pwd)/$CELEBA_PATH/img_align_celeba"
     exit 1
 fi
 
 if [ ! -d "$CELEBA_PATH/Anno" ]; then
-    echo "❌ 错误: CelebA标注目录不存在"
+    echo "❌ 错误: CelebA标注目录不存在: $(pwd)/$CELEBA_PATH/Anno"
     exit 1
 fi
 

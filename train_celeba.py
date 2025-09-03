@@ -400,18 +400,18 @@ def main():
     print("CelebA 弱监督解耦训练启动")
     print("Copyright (c) 2024 - 弱监督解耦的跨模态属性对齐项目")
     
-    # 检查CelebA数据集
-    celeba_path = "/autodl-tmp"
+    # 检查CelebA数据集 (相对路径)
+    celeba_path = ".."  # 相对于jieoulunwen-master目录
     if not os.path.exists(celeba_path):
         print(f"❌ 错误: CelebA数据集路径不存在: {celeba_path}")
         return
     
     if not os.path.exists(f"{celeba_path}/img_align_celeba"):
-        print(f"❌ 错误: CelebA图像目录不存在")
+        print(f"❌ 错误: CelebA图像目录不存在: {os.path.abspath(celeba_path)}/img_align_celeba")
         return
         
     if not os.path.exists(f"{celeba_path}/Anno"):
-        print(f"❌ 错误: CelebA标注目录不存在")
+        print(f"❌ 错误: CelebA标注目录不存在: {os.path.abspath(celeba_path)}/Anno")
         return
     
     print(f"✅ CelebA数据集检查通过: {celeba_path}")
