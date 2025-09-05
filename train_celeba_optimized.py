@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
-CelebA数据集训练脚本 - 弱监督解耦的跨模态属性对齐
+CelebA优化训练脚本 - Stage 1
+基于测试集分析结果的改进版本
+- 重新设计的属性分组
+- 调整的损失权重
+- 早停机制与学习率调度
+- 增强的数据增强
 """
 
 import os
@@ -17,58 +22,63 @@ from torch.cuda.amp import autocast, GradScaler
 # 添加项目路径
 sys.path.append('./weak_supervised_cross_modal')
 
-# 导入项目模块
-from config.base_config import get_config
+# 导入优化配置和数据集
+from config.celeba_optimized_config import get_optimized_config
 from models import WeakSupervisedCrossModalAlignment
 from training.losses import ComprehensiveLoss
 from training.metrics import EvaluationMetrics
-from data.celeba_dataset import CelebADatasetAdapter
+from data.celeba_optimized_dataset import CelebAOptimizedDatasetAdapter
 from utils.logging_utils import setup_logging
 from utils.checkpoint_utils import save_checkpoint, load_checkpoint, cleanup_old_checkpoints
 
-class CelebATrainer:
-    """CelebA训练器"""
+class EarlyStopping:
+    """早停机制"""
+    def __init__(self, patience=5, min_delta=0.001, restore_best_weights=True):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.restore_best_weights = restore_best_weights
+        self.best_loss = float('inf')
+        self.counter = 0
+        self.best_weights = None
+        
+    def __call__(self, val_loss, model):
+        if val_loss < self.best_loss - self.min_delta:
+            self.best_loss = val_loss
+            self.counter = 0
+            if self.restore_best_weights:
+                self.best_weights = model.state_dict().copy()
+            return False
+        else:
+            self.counter += 1
+            return self.counter >= self.patience
     
-    def __init__(self, num_epochs=50, batch_size=16, learning_rate=1e-4):
+    def restore_weights(self, model):
+        if self.restore_best_weights and self.best_weights:
+            model.load_state_dict(self.best_weights)
+
+class CelebAOptimizedTrainer:
+    """CelebA优化训练器"""
+    
+    def __init__(self, stage=1, data_path='D:\\KKK\\data\\CelebA'):
         """
-        初始化CelebA训练器
+        初始化优化训练器
         
         Args:
-            num_epochs: 训练轮数
-            batch_size: 批处理大小
-            learning_rate: 学习率
+            stage: 训练阶段 (1, 2, 3)
+            data_path: CelebA数据集路径
         """
-        # 获取配置
-        self.config = get_config('CelebA')
-        self.config.num_epochs = num_epochs
-        self.config.batch_size = batch_size
-        self.config.learning_rate = learning_rate
+        # 获取对应阶段的优化配置
+        self.config = get_optimized_config(stage)
+        self.stage = stage
+        self.config.data_path = data_path
         
         # 设备配置
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.config.device = self.device
         
-        # 检查现有检查点
-        self.resume_checkpoint = None
-        self.resume_from_checkpoint = False
-        existing_checkpoint = self._find_latest_checkpoint()
-        
-        if existing_checkpoint:
-            print(f"\n发现现有检查点: {existing_checkpoint['path']}")
-            print(f"Epoch: {existing_checkpoint['epoch']}, 验证损失: {existing_checkpoint['val_loss']:.4f}")
-            response = input("是否从此检查点继续训练? (y/n): ").strip().lower()
-            if response in ['y', 'yes', '是']:
-                self.resume_checkpoint = existing_checkpoint
-                self.resume_from_checkpoint = True
-                self.experiment_name = existing_checkpoint['experiment_name']
-                self.save_dir = existing_checkpoint['save_dir']
-                print(f"✅ 将从 Epoch {existing_checkpoint['epoch']} 继续训练")
-            else:
-                print("🔄 将开始新的训练")
-        
-        # 创建实验目录（如果不是续训）
-        if not self.resume_from_checkpoint:
-        self.experiment_name = f"celeba_training_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # 实验目录
+        stage_suffix = f"_stage{stage}" if stage > 1 else ""
+        self.experiment_name = f"celeba_optimized_{datetime.now().strftime('%Y%m%d_%H%M%S')}{stage_suffix}"
         self.save_dir = f"./experiments/{self.experiment_name}"
         os.makedirs(self.save_dir, exist_ok=True)
         os.makedirs(f"{self.save_dir}/checkpoints", exist_ok=True)
@@ -81,79 +91,35 @@ class CelebATrainer:
             'train_loss': [],
             'val_loss': [],
             'train_acc': [],
-            'val_acc': []
+            'val_acc': [],
+            'learning_rates': []
         }
         
-        print("=" * 60)
-        print("CelebA 弱监督解耦训练器初始化")
-        print("=" * 60)
+        # 早停和调度器
+        self.early_stopping = EarlyStopping(
+            patience=self.config.early_stopping_patience,
+            min_delta=0.001
+        )
+        
+        print("=" * 70)
+        print(f"CelebA 优化训练器初始化 - Stage {stage}")
+        print("=" * 70)
         print(f"设备: {self.device}")
-        print(f"训练轮数: {num_epochs}")
-        print(f"批处理大小: {batch_size}")
-        print(f"学习率: {learning_rate}")
+        print(f"训练轮数: {self.config.num_epochs}")
+        print(f"批处理大小: {self.config.batch_size}")
+        print(f"学习率: {self.config.learning_rate}")
         print(f"实验目录: {self.save_dir}")
+        print(f"早停容忍: {self.config.early_stopping_patience} epochs")
         
         if self.device.type == 'cuda':
             print(f"GPU: {torch.cuda.get_device_name()}")
             print(f"GPU内存: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f}GB")
     
-    def _find_latest_checkpoint(self):
-        """查找最新的检查点"""
-        experiments_dir = "./experiments"
-        if not os.path.exists(experiments_dir):
-            return None
-        
-        latest_checkpoint = None
-        latest_time = 0
-        
-        for exp_name in os.listdir(experiments_dir):
-            exp_path = os.path.join(experiments_dir, exp_name)
-            if not os.path.isdir(exp_path):
-                continue
-                
-            checkpoints_dir = os.path.join(exp_path, "checkpoints")
-            if not os.path.exists(checkpoints_dir):
-                continue
-            
-            # 查找最新的检查点文件
-            checkpoint_files = [f for f in os.listdir(checkpoints_dir) 
-                              if f.startswith("checkpoint_epoch_") and f.endswith(".pth")]
-            
-            if not checkpoint_files:
-                continue
-            
-            # 按epoch数字排序，获取最大的
-            checkpoint_files.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
-            latest_file = checkpoint_files[-1]
-            file_path = os.path.join(checkpoints_dir, latest_file)
-            file_time = os.path.getmtime(file_path)
-            
-            if file_time > latest_time:
-                try:
-                    # 尝试加载检查点获取信息
-                    checkpoint = torch.load(file_path, map_location='cpu', weights_only=False)
-                    epoch = checkpoint.get('epoch', 0)
-                    val_loss = checkpoint.get('best_val_loss', float('inf'))
-                    
-                    latest_checkpoint = {
-                        'path': file_path,
-                        'epoch': epoch,
-                        'val_loss': val_loss,
-                        'experiment_name': exp_name,
-                        'save_dir': exp_path
-                    }
-                    latest_time = file_time
-                except Exception as e:
-                    print(f"警告: 无法加载检查点 {file_path}: {e}")
-                    continue
-        
-        return latest_checkpoint
-    
     def setup_data(self):
-        """设置数据加载器"""
-        print("\n设置数据加载器...")
+        """设置优化数据加载器"""
+        print("\n设置优化数据加载器...")
         
-        adapter = CelebADatasetAdapter(self.config)
+        adapter = CelebAOptimizedDatasetAdapter(self.config)
         self.dataloaders = adapter.get_dataloaders()
         
         # 获取数据集信息
@@ -161,15 +127,15 @@ class CelebATrainer:
         val_size = len(self.dataloaders['val'].dataset)
         test_size = len(self.dataloaders['test'].dataset)
         
-        print(f"训练集: {train_size:,} 样本")
+        print(f"训练集: {train_size:,} 样本 (批次数: {len(self.dataloaders['train'])})")
         print(f"验证集: {val_size:,} 样本")
         print(f"测试集: {test_size:,} 样本")
         
         return True
     
     def setup_model(self):
-        """设置模型"""
-        print("\n设置模型...")
+        """设置优化模型"""
+        print("\n设置优化模型...")
         
         # 创建模型
         self.model = WeakSupervisedCrossModalAlignment(self.config)
@@ -182,6 +148,19 @@ class CelebATrainer:
         print(f"模型参数总数: {total_params:,}")
         print(f"可训练参数: {trainable_params:,}")
         
+        # 打印启用的模块
+        enabled_modules = []
+        if self.config.use_frequency_decoupling:
+            enabled_modules.append("AFANet")
+        if self.config.use_hierarchical_decomposition:
+            enabled_modules.append("WINNER") 
+        if self.config.use_dynamic_routing:
+            enabled_modules.append("MAVD")
+        if self.config.use_cmdl_regularization:
+            enabled_modules.append("CMDL")
+        
+        print(f"启用模块: {enabled_modules if enabled_modules else ['仅基础分类']}")
+        
         # 创建损失函数
         self.criterion = ComprehensiveLoss(self.config)
         
@@ -189,63 +168,53 @@ class CelebATrainer:
         self.optimizer = optim.AdamW(
             self.model.parameters(),
             lr=self.config.learning_rate,
-            weight_decay=self.config.weight_decay
+            weight_decay=self.config.weight_decay,
+            eps=1e-8
         )
         
         # 创建学习率调度器
-        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer,
-            T_max=self.config.num_epochs
+            mode='min',
+            factor=self.config.lr_reduce_factor,
+            patience=self.config.lr_reduce_patience,
+            verbose=True,
+            min_lr=1e-7
         )
         
         # AMP混合精度
         self.scaler = GradScaler(enabled=(self.device.type == 'cuda'))
         
+        # OOM保护机制
+        self.original_batch_size = self.config.batch_size
+        self.oom_count = 0
+        
         # 评估指标
         self.metrics = EvaluationMetrics(self.config.num_classes)
         
-        # 如果需要从检查点恢复，加载状态
-        if self.resume_from_checkpoint and self.resume_checkpoint:
-            self._load_checkpoint_state()
-        
         return True
     
-    def _load_checkpoint_state(self):
-        """从检查点加载模型状态"""
-        try:
-            checkpoint = torch.load(self.resume_checkpoint['path'], map_location=self.device, weights_only=False)
+    def _handle_oom(self):
+        """处理OOM异常"""
+        self.oom_count += 1
+        print(f"⚠️ GPU内存不足! 第{self.oom_count}次OOM")
+        
+        if self.oom_count <= 3:
+            # 清理缓存
+            torch.cuda.empty_cache()
             
-            # 加载模型状态
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-            print("✅ 模型状态已恢复")
-            
-            # 加载优化器状态
-            if 'optimizer_state_dict' in checkpoint:
-                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-                print("✅ 优化器状态已恢复")
-            
-            # 加载调度器状态
-            if 'scheduler_state_dict' in checkpoint:
-                self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-                print("✅ 学习率调度器状态已恢复")
-            
-            # 恢复训练状态
-            self.current_epoch = checkpoint.get('epoch', 0) + 1  # 从下一个epoch开始
-            self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
-            
-            # 恢复训练历史
-            if 'training_history' in checkpoint:
-                self.training_history = checkpoint['training_history']
-                print("✅ 训练历史已恢复")
-            
-            print(f"📍 将从 Epoch {self.current_epoch} 开始继续训练")
-            print(f"📊 当前最佳验证损失: {self.best_val_loss:.4f}")
-            
-        except Exception as e:
-            print(f"❌ 加载检查点失败: {e}")
-            print("🔄 将从头开始训练")
-            self.resume_from_checkpoint = False
-            self.current_epoch = 0
+            # 减少batch_size
+            new_batch_size = max(4, self.config.batch_size // 2)
+            if new_batch_size != self.config.batch_size:
+                print(f"🔧 自动调整batch_size: {self.config.batch_size} → {new_batch_size}")
+                self.config.batch_size = new_batch_size
+                
+                # 重新创建数据加载器
+                print("🔄 重新创建数据加载器...")
+                self.setup_data()
+        else:
+            print("❌ 多次OOM，建议检查GPU内存或降低模型复杂度")
+            raise RuntimeError("连续OOM超过3次，训练终止")
     
     def train_epoch(self, epoch):
         """训练一个epoch"""
@@ -263,6 +232,7 @@ class CelebATrainer:
         
         print(f"\nEpoch {epoch+1}/{self.config.num_epochs} - 训练阶段")
         
+        start_time = time.time()
         for batch_idx, (images, targets) in enumerate(self.dataloaders['train']):
             # 数据移到设备
             images = images.to(self.device)
@@ -277,10 +247,17 @@ class CelebATrainer:
                 loss, loss_components = self.criterion(outputs, targets, epoch)
             
             # 反向传播 with AMP
-            self.scaler.scale(loss).backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
+            try:
+                self.scaler.scale(loss).backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            except RuntimeError as e:
+                if "out of memory" in str(e).lower():
+                    self._handle_oom()
+                    continue
+                else:
+                    raise e
             
             # 统计
             batch_size = images.size(0)
@@ -297,9 +274,11 @@ class CelebATrainer:
                     total_predictions[key] += batch_size
             
             # 打印进度
-            if batch_idx % 100 == 0:
+            if batch_idx % 50 == 0:
                 progress = 100. * batch_idx / len(self.dataloaders['train'])
-                print(f"  进度: {progress:.1f}%, 损失: {loss.item():.4f}")
+                elapsed = time.time() - start_time
+                eta = elapsed / max(1, batch_idx + 1) * (len(self.dataloaders['train']) - batch_idx - 1)
+                print(f"  进度: {progress:.1f}%, 损失: {loss.item():.4f}, ETA: {eta/60:.1f}min")
         
         # 计算平均损失和准确率
         avg_loss = total_loss / total_samples
@@ -312,6 +291,7 @@ class CelebATrainer:
         
         print(f"  训练损失: {avg_loss:.4f}")
         print(f"  训练准确率: {overall_accuracy:.4f}")
+        print(f"  当前学习率: {self.optimizer.param_groups[0]['lr']:.2e}")
         
         return avg_loss, overall_accuracy
     
@@ -321,13 +301,7 @@ class CelebATrainer:
         
         total_loss = 0.0
         total_samples = 0
-        correct_predictions = {}
-        total_predictions = {}
-        
-        # 初始化准确率统计
-        for key in self.config.num_classes.keys():
-            correct_predictions[key] = 0
-            total_predictions[key] = 0
+        self.metrics.reset()
         
         print(f"  验证阶段...")
         
@@ -348,30 +322,27 @@ class CelebATrainer:
                 total_loss += loss.item() * batch_size
                 total_samples += batch_size
                 
-                # 计算准确率
-                for key in self.config.num_classes.keys():
-                    if 'predictions' in outputs and key in outputs['predictions'] and key in targets:
-                        logits = outputs['predictions'][key]
-                        pred = torch.argmax(logits, dim=1)
-                        correct = (pred == targets[key]).sum().item()
-                        correct_predictions[key] += correct
-                        total_predictions[key] += batch_size
+                # 更新评估指标
+                if 'predictions' in outputs:
+                    self.metrics.update(outputs['predictions'], targets)
         
         # 计算平均损失和准确率
         avg_loss = total_loss / total_samples
-        avg_accuracy = {}
-        for key in self.config.num_classes.keys():
-            if total_predictions[key] > 0:
-                avg_accuracy[key] = correct_predictions[key] / total_predictions[key]
-        
-        overall_accuracy = np.mean(list(avg_accuracy.values()))
+        metric_results = self.metrics.compute()
+        overall_accuracy = metric_results.get('mean_accuracy', 0.0)
         
         print(f"  验证损失: {avg_loss:.4f}")
         print(f"  验证准确率: {overall_accuracy:.4f}")
         
-        return avg_loss, overall_accuracy
+        # 打印各属性组性能
+        print("  各属性组验证准确率:")
+        for attr in self.config.num_classes.keys():
+            acc = metric_results.get(f'{attr}_accuracy', 0.0)
+            print(f"    {attr}: {acc:.4f}")
+        
+        return avg_loss, overall_accuracy, metric_results
     
-    def save_checkpoint(self, epoch, is_best=False):
+    def save_checkpoint(self, epoch, is_best=False, metric_results=None):
         """保存检查点"""
         checkpoint = {
             'epoch': epoch,
@@ -380,7 +351,9 @@ class CelebATrainer:
             'scheduler_state_dict': self.scheduler.state_dict(),
             'best_val_loss': self.best_val_loss,
             'training_history': self.training_history,
-            'config': self.config
+            'config': self.config,
+            'stage': self.stage,
+            'metric_results': metric_results
         }
         
         # 保存当前检查点
@@ -391,7 +364,7 @@ class CelebATrainer:
         if is_best:
             best_path = f"{self.save_dir}/checkpoints/best_model.pth"
             torch.save(checkpoint, best_path)
-            print(f"  💾 保存最佳模型: {best_path}")
+            print(f"  💾 保存最佳模型: best_model.pth")
         
         # 自动清理旧检查点，只保留最近3个
         try:
@@ -400,8 +373,8 @@ class CelebATrainer:
             print(f"  ⚠️ 清理旧检查点时出错: {e}")
     
     def train(self):
-        """执行完整训练流程"""
-        print("\n开始CelebA训练...")
+        """执行完整优化训练流程"""
+        print(f"\n开始CelebA优化训练 - Stage {self.stage}...")
         
         # 设置数据和模型
         if not self.setup_data():
@@ -413,50 +386,51 @@ class CelebATrainer:
         # 保存配置
         config_path = f"{self.save_dir}/config.json"
         with open(config_path, 'w') as f:
-            # 将配置转换为可序列化的字典
             config_dict = {
+                'stage': self.stage,
                 'dataset_name': self.config.dataset_name,
                 'num_epochs': self.config.num_epochs,
                 'batch_size': self.config.batch_size,
                 'learning_rate': self.config.learning_rate,
                 'image_size': self.config.image_size,
                 'num_classes': self.config.num_classes,
-                'loss_weights': self.config.loss_weights
+                'loss_weights': self.config.loss_weights,
+                'early_stopping_patience': self.config.early_stopping_patience,
+                'enabled_modules': {
+                    'frequency_decoupling': self.config.use_frequency_decoupling,
+                    'hierarchical_decomposition': self.config.use_hierarchical_decomposition,
+                    'dynamic_routing': self.config.use_dynamic_routing,
+                    'cmdl_regularization': self.config.use_cmdl_regularization
+                }
             }
             json.dump(config_dict, f, indent=2)
         
         # 训练循环
         start_time = time.time()
         
-        # 计算实际的训练轮数范围
-        start_epoch = self.current_epoch
-        end_epoch = self.config.num_epochs
+        print(f"🚀 开始Stage {self.stage}训练: 0 -> {self.config.num_epochs-1} epochs")
         
-        if start_epoch >= end_epoch:
-            print(f"✅ 训练已完成 (当前epoch: {start_epoch}, 目标epochs: {end_epoch})")
-            return True
-        
-        print(f"🚀 开始训练: Epoch {start_epoch} -> {end_epoch-1}")
-        
-        for epoch in range(start_epoch, end_epoch):
-            print(f"\n{'='*60}")
-            print(f"Epoch {epoch+1}/{self.config.num_epochs}")
-            print(f"{'='*60}")
+        for epoch in range(self.config.num_epochs):
+            print(f"\n{'='*70}")
+            print(f"Epoch {epoch+1}/{self.config.num_epochs} - Stage {self.stage}")
+            print(f"{'='*70}")
             
             # 训练
             train_loss, train_acc = self.train_epoch(epoch)
             
             # 验证
-            val_loss, val_acc = self.validate_epoch(epoch)
+            val_loss, val_acc, metric_results = self.validate_epoch(epoch)
             
             # 学习率调度
-            self.scheduler.step()
+            self.scheduler.step(val_loss)
+            current_lr = self.optimizer.param_groups[0]['lr']
             
             # 记录历史
             self.training_history['train_loss'].append(train_loss)
             self.training_history['val_loss'].append(val_loss)
             self.training_history['train_acc'].append(train_acc)
             self.training_history['val_acc'].append(val_acc)
+            self.training_history['learning_rates'].append(current_lr)
             
             # 检查是否为最佳模型
             is_best = val_loss < self.best_val_loss
@@ -464,7 +438,16 @@ class CelebATrainer:
                 self.best_val_loss = val_loss
             
             # 保存检查点
-            self.save_checkpoint(epoch, is_best)
+            self.save_checkpoint(epoch, is_best, metric_results)
+            
+            # 早停检查
+            if self.early_stopping(val_loss, self.model):
+                print(f"\n🛑 早停触发！在 Epoch {epoch+1} 停止训练")
+                print(f"最佳验证损失: {self.early_stopping.best_loss:.4f}")
+                if self.early_stopping.restore_best_weights:
+                    self.early_stopping.restore_weights(self.model)
+                    print("已恢复最佳权重")
+                break
             
             # 打印摘要
             elapsed = time.time() - start_time
@@ -472,7 +455,9 @@ class CelebATrainer:
             print(f"  训练损失: {train_loss:.4f}, 训练准确率: {train_acc:.4f}")
             print(f"  验证损失: {val_loss:.4f}, 验证准确率: {val_acc:.4f}")
             print(f"  最佳验证损失: {self.best_val_loss:.4f}")
-            print(f"  用时: {elapsed/60:.1f} 分钟")
+            print(f"  学习率: {current_lr:.2e}")
+            print(f"  累计用时: {elapsed/60:.1f} 分钟")
+            print(f"  早停计数: {self.early_stopping.counter}/{self.early_stopping.patience}")
         
         # 训练完成
         total_time = time.time() - start_time
@@ -481,15 +466,16 @@ class CelebATrainer:
         return True
     
     def generate_training_report(self, total_time):
-        """生成训练报告"""
-        print("\n" + "="*60)
-        print("CelebA 训练完成报告")
-        print("="*60)
+        """生成优化训练报告"""
+        print("\n" + "="*70)
+        print(f"CelebA Stage {self.stage} 优化训练完成报告")
+        print("="*70)
         
         print(f"总训练时间: {total_time/3600:.2f} 小时")
         print(f"最佳验证损失: {self.best_val_loss:.4f}")
         print(f"最终训练准确率: {self.training_history['train_acc'][-1]:.4f}")
         print(f"最终验证准确率: {self.training_history['val_acc'][-1]:.4f}")
+        print(f"最终学习率: {self.training_history['learning_rates'][-1]:.2e}")
         
         # 保存训练历史
         history_path = f"{self.save_dir}/training_history.json"
@@ -499,18 +485,23 @@ class CelebATrainer:
         # 保存训练报告
         report = {
             "experiment_name": self.experiment_name,
-            "dataset": "CelebA",
-            "total_epochs": self.config.num_epochs,
+            "stage": self.stage,
+            "dataset": self.config.dataset_name,
+            "total_epochs": len(self.training_history['train_loss']),
+            "planned_epochs": self.config.num_epochs,
             "total_time_hours": total_time / 3600,
             "best_val_loss": self.best_val_loss,
             "final_train_acc": self.training_history['train_acc'][-1],
             "final_val_acc": self.training_history['val_acc'][-1],
+            "final_lr": self.training_history['learning_rates'][-1],
             "model_parameters": sum(p.numel() for p in self.model.parameters()),
             "device": str(self.device),
+            "early_stopped": len(self.training_history['train_loss']) < self.config.num_epochs,
             "config": {
                 "batch_size": self.config.batch_size,
                 "learning_rate": self.config.learning_rate,
-                "num_classes": self.config.num_classes
+                "num_classes": self.config.num_classes,
+                "loss_weights": self.config.loss_weights
             }
         }
         
@@ -521,46 +512,42 @@ class CelebATrainer:
         print(f"\n📄 训练报告已保存: {report_path}")
         print(f"📄 训练历史已保存: {history_path}")
         print(f"💾 最佳模型已保存: {self.save_dir}/checkpoints/best_model.pth")
-        print("="*60)
+        print("="*70)
 
 def main():
     """主函数"""
-    print("CelebA 弱监督解耦训练启动")
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='CelebA优化训练')
+    parser.add_argument('--stage', type=int, default=1, choices=[1, 2, 3], 
+                       help='训练阶段 (1: 基础优化, 2: +轻量模块, 3: +完整模块)')
+    parser.add_argument('--data-path', type=str, default='D:\\KKK\\data\\CelebA',
+                       help='CelebA数据集路径')
+    
+    args = parser.parse_args()
+    
+    print("CelebA 优化训练启动")
     print("Copyright (c) 2024 - 弱监督解耦的跨模态属性对齐项目")
     
-    # 检查CelebA数据集 (相对路径)
-    celeba_path = ".."  # 相对于jieoulunwen-master目录
-    if not os.path.exists(celeba_path):
-        print(f"❌ 错误: CelebA数据集路径不存在: {celeba_path}")
+    # 检查数据集
+    if not os.path.exists(args.data_path):
+        print(f"❌ 错误: CelebA数据集路径不存在: {args.data_path}")
         return
     
-    if not os.path.exists(f"{celeba_path}/img_align_celeba"):
-        print(f"❌ 错误: CelebA图像目录不存在: {os.path.abspath(celeba_path)}/img_align_celeba")
-        return
-        
-    if not os.path.exists(f"{celeba_path}/Anno"):
-        print(f"❌ 错误: CelebA标注目录不存在: {os.path.abspath(celeba_path)}/Anno")
-        return
-        
-    if not os.path.exists(f"{celeba_path}/Eval"):
-        print(f"❌ 错误: CelebA评估目录不存在: {os.path.abspath(celeba_path)}/Eval")
-        return
+    print(f"✅ CelebA数据集检查通过: {args.data_path}")
     
-    print(f"✅ CelebA数据集检查通过: {celeba_path}")
-    
-    # 创建训练器并开始训练
-    trainer = CelebATrainer(
-        num_epochs=50,
-        batch_size=16,
-        learning_rate=1e-4
+    # 创建优化训练器并开始训练
+    trainer = CelebAOptimizedTrainer(
+        stage=args.stage,
+        data_path=args.data_path
     )
     
     success = trainer.train()
     
     if success:
-        print("\n🎉 CelebA训练成功完成!")
+        print(f"\n🎉 CelebA Stage {args.stage} 优化训练成功完成!")
     else:
-        print("\n❌ CelebA训练过程中出现错误")
+        print(f"\n❌ CelebA Stage {args.stage} 优化训练过程中出现错误")
 
 if __name__ == "__main__":
     main() 

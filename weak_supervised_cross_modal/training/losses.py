@@ -135,13 +135,31 @@ class ComprehensiveLoss(nn.Module):
     
     def _compute_classification_loss(self, predictions: Dict[str, torch.Tensor], 
                                    targets: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """计算分类损失"""
+        """计算分类损失（支持自适应损失函数）"""
         total_cls_loss = 0.0
         num_attributes = 0
         
+        # 导入自适应损失管理器
+        try:
+            from .focal_loss import create_adaptive_loss
+            use_adaptive = True
+        except ImportError:
+            use_adaptive = False
+        
         for attr_name, pred_logits in predictions.items():
             if attr_name in targets:
-                attr_loss = self.ce_loss(pred_logits, targets[attr_name])
+                # 选择损失函数
+                if use_adaptive:
+                    # 为不平衡属性组使用自适应损失
+                    if attr_name in ['facial_hair', 'hair_basic', 'accessories']:
+                        loss_fn = create_adaptive_loss(attr_name, pred_logits.size(1))
+                        if hasattr(loss_fn, 'to'):
+                            loss_fn = loss_fn.to(pred_logits.device)
+                        attr_loss = loss_fn(pred_logits, targets[attr_name])
+                    else:
+                        attr_loss = self.ce_loss(pred_logits, targets[attr_name])
+                else:
+                    attr_loss = self.ce_loss(pred_logits, targets[attr_name])
                 
                 # 属性特定权重
                 attr_weight = self.loss_weights.get(f'{attr_name}_cls', 1.0)
